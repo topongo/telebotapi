@@ -1,2 +1,2 @@
 # telebot
-TelegramBot module for telegram
+Python module for telegram bots
