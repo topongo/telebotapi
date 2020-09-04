@@ -6,8 +6,6 @@ from time import sleep
 
 
 class TelegramBot:
-    WRESTLING = "CAACAgQAAxkBAAIBtV9SpsLfOB_JLGRDo1jTsruSxeAZAAMBAAKeQjseA7snYSyCpTAbBA"
-
     def __init__(self, token, name=None):
         if len(token) == 46:
             self.token = token
