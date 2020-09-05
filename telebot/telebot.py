@@ -32,19 +32,21 @@ class TelegramBot:
     class BootstrapException(Exception):
         pass
 
-
     def query(self, method, params, connection=None):
-        if connection == None:
+        if connection is None:
             connection = self.c
 
         connection.request("POST", "/bot{0}/{1}".format(self.token, method), urlencode(params), headers=self.h)
         return json.load(connection.getresponse())
 
-
-    def getUpdates(self, add_params={}):
-        #p = self.g
-        p = add_params
-        p.update({ "offset": self.last_update })
+    def getUpdates(self, a=None):
+        # p = self.g
+        if a is not None:
+            assert type(a) == dict
+        else:
+            a = {}
+        p = {"offset": self.last_update}
+        p.update(a)
         return self.query("getUpdates", p, self.c_updates)
 
     def bootstrap(self):
@@ -64,7 +66,6 @@ class TelegramBot:
                 f.write(str(self.last_update))
         self.bootstrapped = True
         self.daemon.start()
-
 
     def poll(self):
         if not self.bootstrapped:
@@ -92,7 +93,6 @@ class TelegramBot:
                 sleep(self.delay)
                 # print("Polled")
 
-
     def restart_daemon(self):
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
@@ -111,51 +111,62 @@ class TelegramBot:
         else:
             return False
 
-    def sendMessage(self, i, b, a={}):
+    def sendMessage(self, chat_id, body, a=None):
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
-        assert type(a) == "list"
-        params = {"chat_id": id, "text": b}
+        if a is not None:
+            assert type(a) == dict
+        else:
+            a = {}
+        params = {"chat_id": chat_id, "text": body}
         params.update(a)
         return json.load(self.c.getresponse())["ok"]
         # return True if telegram does, otherwise False
 
-    def sendPhoto(self, chat_id, file_id):
-        p = { "chat_id": chat_id, "photo": file_id }
+    def sendPhoto(self, chat_id, file_id, a=None):
+        if a is not None:
+            assert type(a) == dict
+        else:
+            a = {}
+        p = {"chat_id": chat_id, "photo": file_id}
+        p.update(a)
         return self.query("sendPhoto", p)
 
-
-    def sendSticker(self, chat_id, file_id):
-        p = { "chat_id": chat_id, "sticker": file_id }
+    def sendSticker(self, chat_id, file_id, a=None):
+        if a is not None:
+            assert type(a) == dict
+        else:
+            a = {}
+        p = {"chat_id": chat_id, "sticker": file_id}
+        p.update(a)
         return self.query("sendSticker", p)
 
     def daemon_remote(self, active, delay):
         self.daemon.active = active
-        if delay != None and delay != self.daemonDelay:
+        if delay is not None and delay != self.daemonDelay:
             self.daemonDelay = delay
 
         if self.bootstrapped:
-            if delay != None or active and not self.daemon.is_alive():
+            if delay is not None or active and not self.daemon.is_alive():
                 self.restart_daemon()
-
 
     def has_updates(self):
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
         return len(self.updates) > 0
 
-    def get_updates(self,id=None):
+    def get_updates(self, chat_id=None):
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
-        if id == None:
+        if chat_id is None:
             for i in range(len(self.updates)):
                 yield self.updates.pop(0)
         else:
-            if type(id) == int:
-                for i in [k for k in self.updates if k.message.from_.id == id]:
+            if type(chat_id) == int:
+                for i in [k for k in self.updates if k.message.from_.id == chat_id]:
                     yield self.updates.pop(self.updates.index(i))
-            elif type(id) == list:
-                for i in [k for k in self.updates if k.message.from_.id in id]:
+            elif type(chat_id) == list:
+                for i in [k for k in self.updates if k.message.from_.id in chat_id]:
                     yield self.updates.pop(self.updates.index(i))
             else:
                 raise TypeError("the provided id must be int or list")
@@ -180,21 +191,21 @@ class TelegramBot:
                     for i in m["entities"]:
                         self.entities.append(self.Entity(i))
 
-                for i in dict([ (k, m[k]) for k in m if k in "from chat entities" ]):
-                    self.__setattr__(i,m[i])
+                for i in dict([(k, m[k]) for k in m if k in "from chat entities"]):
+                    self.__setattr__(i, m[i])
                 self.raw = m
 
             class Entity:
-                def __init__(self,e):
+                def __init__(self, e):
                     for i in e:
-                        self.__setattr__(i,e[i])
+                        self.__setattr__(i, e[i])
                     self.raw = e
 
 
 class User:
     def __init__(self, u):
         for i in u:
-            self.__setattr__(i,u[i])
+            self.__setattr__(i, u[i])
         self.raw = u
 
 
