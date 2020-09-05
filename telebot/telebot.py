@@ -21,7 +21,8 @@ class TelegramBot:
         self.name = name
         self.daemonDelay = 1
         self.bootstrapped = False
-        self.daemon = self.Daemon(self.poll, self.daemonDelay)
+        self.current_thread = threading.currentThread()
+        self.daemon = self.Daemon(self.poll, self.current_thread, self.daemonDelay)
 
     class TokenException(Exception):
         pass
@@ -54,16 +55,8 @@ class TelegramBot:
         if not r["ok"]:
             raise self.QueryException(
                 "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
-        try:
-            with open("telegrambot_data/last_offset", "r") as f:
-                self.last_update = int(f.read())
-        except (ValueError, FileNotFoundError):
-            try:
-                self.last_update = r["result"][0]["update_id"]
-            except KeyError:
-                self.last_update = 0
-            with open("telegrambot_data/last_offset", "w+") as f:
-                f.write(str(self.last_update))
+        if len(r["result"]) > 0:
+            self.last_update = r["result"][0]["update_id"]
         self.bootstrapped = True
         self.daemon.start()
 
@@ -81,14 +74,15 @@ class TelegramBot:
                 # print(self.g)
 
     class Daemon(threading.Thread):
-        def __init__(self, poll, delay):
+        def __init__(self, poll, parent_thread, delay):
             threading.Thread.__init__(self)
             self.poll = poll
             self.active = True
             self.delay = delay
+            self.parent_thread = parent_thread
 
         def run(self):
-            while self.active:
+            while self.active and self.parent_thread.is_alive():
                 self.poll()
                 sleep(self.delay)
                 # print("Polled")
@@ -99,7 +93,7 @@ class TelegramBot:
         if self.daemon.is_alive():
             self.daemon.active = False
             self.daemon.join()
-        self.daemon = self.Daemon(self.poll, self.daemonDelay)
+        self.daemon = self.Daemon(self.poll, self.current_thread, self.daemonDelay)
         self.daemon.start()
 
     def news(self):
