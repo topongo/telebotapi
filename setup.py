@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
       name='telebot',
-      version='0.1',
+      version='0.2',
       description='',
       url='https://github.com/topongo/telebot',
       author='Lorenzo Bodini',
