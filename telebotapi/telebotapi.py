@@ -215,9 +215,6 @@ class TelegramBot:
                     self.__setattr__(i, c[i])
                 self.raw = c
 
-            def has_entities(self):
-                return len(self.entities) > 0
-
             class Entity:
                 def __init__(self, e, text):
                     self.offset = e["offset"]
