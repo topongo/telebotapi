@@ -119,9 +119,9 @@ class TelegramBot:
             assert type(a) == dict
         else:
             a = {}
-        params = {"chat_id": user.id, "text": body}
-        params.update(a)
-        return json.load(self.c.getresponse())["ok"]
+        p = {"chat_id": user.id, "text": body}
+        p.update(a)
+        return self.query("sendMessage", p)
         # return True if telegram does, otherwise False
 
     def sendPhoto(self, user, photo, a=None):
