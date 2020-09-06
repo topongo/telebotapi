@@ -205,10 +205,7 @@ class TelegramBot:
                 elif "photo" in c:
                     self.photos = []
                     self.type = "photo"
-                    p = c["photo"]
-                    p.reverse()
-                    for i in p:
-                        self.photos.append(TelegramBot.Photo(i))
+                    self.photo = TelegramBot.Photo(c["photo"])
                     if "caption" in c:
                         self.text = c["caption"]
                         for i in c["caption_entities"]:
