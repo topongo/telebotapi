@@ -1,1 +1,1 @@
-from .telebot import TelegramBot, User, Chat
+from .telebot import TelegramBot, File

@@ -5,6 +5,12 @@ from urllib.parse import urlencode
 from time import sleep
 
 
+class File:
+    def __init__(self, f):
+        self.id = f["file_id"]
+        self.size = f["file_size"]
+
+
 class TelegramBot:
     def __init__(self, token, name=None):
         if len(token) == 46:
@@ -105,33 +111,38 @@ class TelegramBot:
         else:
             return False
 
-    def sendMessage(self, chat_id, body, a=None):
+    def sendMessage(self, user, body, a=None):
+        assert type(user) == TelegramBot.User
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
         if a is not None:
             assert type(a) == dict
         else:
             a = {}
-        params = {"chat_id": chat_id, "text": body}
+        params = {"chat_id": user.id, "text": body}
         params.update(a)
         return json.load(self.c.getresponse())["ok"]
         # return True if telegram does, otherwise False
 
-    def sendPhoto(self, chat_id, file_id, a=None):
+    def sendPhoto(self, user, photo, a=None):
+        assert type(user) == TelegramBot.User
+        assert type(photo) == TelegramBot.Photo
         if a is not None:
             assert type(a) == dict
         else:
             a = {}
-        p = {"chat_id": chat_id, "photo": file_id}
+        p = {"chat_id": user.id, "photo": photo.id}
         p.update(a)
         return self.query("sendPhoto", p)
 
-    def sendSticker(self, chat_id, file_id, a=None):
+    def sendSticker(self, user, sticker, a=None):
+        assert type(user) == TelegramBot.User
+        assert type(sticker) == TelegramBot.Sticker
         if a is not None:
             assert type(a) == dict
         else:
             a = {}
-        p = {"chat_id": chat_id, "sticker": file_id}
+        p = {"chat_id": user.id, "sticker": sticker.id}
         p.update(a)
         return self.query("sendSticker", p)
 
@@ -170,41 +181,79 @@ class TelegramBot:
             self.id = u["update_id"]
             for i in ["message", "edited_message", "channel_post", "edited_channel_post"]:
                 if i in u:
-                    self.message = self.Message(u[i])
+                    self.content = self.Message(u[i])
+                    self.type = i
                     break
 
             self.raw = u
 
         class Message:
-            def __init__(self, m):
-                if "from" in m:
-                    self.from_ = User(m["from"])
-                self.chat = Chat(m["chat"])
-                if "entities" in m:
-                    self.entities = []
-                    for i in m["entities"]:
-                        self.entities.append(self.Entity(i))
+            def __init__(self, c):
+                if "from" in c:
+                    self.from_ = TelegramBot.User(c["from"])
+                self.chat = TelegramBot.Chat(c["chat"])
+                self.entities = []
+                self.type = "unknown"
+                self.text = ""
+                if "text" in c:
+                    self.type = "text"
+                    self.text = c["text"]
+                    if "entities" in c:
+                        self.text = c["text"]
+                        for i in c["entities"]:
+                            self.entities.append(self.Entity(i, self.text))
+                elif "photo" in c:
+                    self.photos = []
+                    self.type = "photo"
+                    p = c["photo"]
+                    p.reverse()
+                    for i in p:
+                        self.photos.append(TelegramBot.Photo(i))
+                    if "caption" in c:
+                        self.text = c["caption"]
+                        for i in c["caption_entities"]:
+                            self.entities.append(self.Entity(i, self.text))
 
-                for i in dict([(k, m[k]) for k in m if k in "from chat entities"]):
-                    self.__setattr__(i, m[i])
-                self.raw = m
+                for i in dict([(k, c[k]) for k in c if k not in "text from chat entities caption caption_entities"]):
+                    self.__setattr__(i, c[i])
+                self.raw = c
+
+            def has_entities(self):
+                return len(self.entities) > 0
 
             class Entity:
-                def __init__(self, e):
-                    for i in e:
+                def __init__(self, e, text):
+                    self.offset = e["offset"]
+                    self.length = e["length"]
+                    self.type = e["type"]
+                    self.text = text[self.offset:self.offset + self.length]
+                    for i in dict([(k, e[k]) for k in e if k not in "offset length type"]):
                         self.__setattr__(i, e[i])
                     self.raw = e
 
+    class User:
+        def __init__(self, u):
+            for i in u:
+                self.__setattr__(i, u[i])
+            self.raw = u
 
-class User:
-    def __init__(self, u):
-        for i in u:
-            self.__setattr__(i, u[i])
-        self.raw = u
+    class Chat:
+        def __init__(self, c):
+            for i in c:
+                self.__setattr__(i, c[i])
 
+    class Photo(File):
+        def __init__(self, f):
+            File.__init__(self, f)
+            self.height = f["height"]
+            self.width = f["width"]
 
-class Chat:
-    def __init__(self, c):
-        self.username = c["username"]
-        self.id = c["id"]
-        self.is_bot = c["type"]
+            self.raw = f
+
+    class Sticker(File):
+        def __init__(self, f):
+            File.__init__(self, f)
+            self.height = f["height"]
+            self.width = f["width"]
+            for i in dict([(k, f[k]) for k in f if k not in "height width file_id"]):
+                self.__setattr__(i, f[i])
