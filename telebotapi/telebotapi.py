@@ -39,6 +39,9 @@ class TelegramBot:
     class BootstrapException(Exception):
         pass
 
+    class ResponseNotOkException(Exception):
+        pass
+
     def query(self, method, params, connection=None):
         if connection is None:
             connection = self.c
@@ -146,6 +149,27 @@ class TelegramBot:
         p.update(a)
         return self.query("sendSticker", p)
 
+    def forwardMessage(self, chat_in, chat_out, message, a=None):
+        assert type(chat_in) == TelegramBot.Chat
+        assert type(chat_out) == TelegramBot.Chat
+        assert type(message) == TelegramBot.Update.Message
+        if a is not None:
+            assert type(a) == dict
+        else:
+            a = {}
+        p = {"chat_id": chat_out.id, "from_chat_id": chat_in.id, "message_id": message.id}
+        p.update(a)
+        return self.query("forwardMessage", p)
+
+    def chat_from_user(self, user):
+        assert type(user) == TelegramBot.User
+        p = {"chat_id": user.id}
+        q = self.query("getChat", p)
+        if not q["ok"]:
+            raise TelegramBot.ResponseNotOkException(q)
+        else:
+            return TelegramBot.Chat(q["result"])
+
     def daemon_remote(self, active, delay):
         self.daemon.active = active
         if delay is not None and delay != self.daemonDelay:
@@ -189,6 +213,7 @@ class TelegramBot:
 
         class Message:
             def __init__(self, c):
+                self.id = c["message_id"]
                 if "from" in c:
                     self.from_ = TelegramBot.User(c["from"])
                 self.chat = TelegramBot.Chat(c["chat"])
@@ -211,7 +236,7 @@ class TelegramBot:
                         for i in c["caption_entities"]:
                             self.entities.append(self.Entity(i, self.text))
 
-                for i in dict([(k, c[k]) for k in c if k not in "text from chat entities caption caption_entities"]):
+                for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities"]):
                     self.__setattr__(i, c[i])
                 self.raw = c
 
@@ -233,7 +258,9 @@ class TelegramBot:
 
     class Chat:
         def __init__(self, c):
-            for i in c:
+            print(c)
+            self.id = c["id"]
+            for i in dict([ (k, c[k]) for k in c if k not in "id"]):
                 self.__setattr__(i, c[i])
 
     class Photo(File):
