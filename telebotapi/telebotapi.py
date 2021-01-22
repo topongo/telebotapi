@@ -33,7 +33,10 @@ class TelegramBot:
     class TokenException(Exception):
         pass
 
-    class QueryException(Exception):
+    class GenericQueryException(Exception):
+        pass
+
+    class ConflictQueryException(Exception):
         pass
 
     class BootstrapException(Exception):
@@ -42,12 +45,21 @@ class TelegramBot:
     class ResponseNotOkException(Exception):
         pass
 
+    class TypeError(Exception):
+        pass
+
     def query(self, method, params, connection=None):
         if connection is None:
             connection = self.c
 
         connection.request("POST", "/bot{0}/{1}".format(self.token, method), urlencode(params), headers=self.h)
-        return json.load(connection.getresponse())
+        r = json.load(connection.getresponse())
+        if not r["ok"]:
+            if "Conflict: terminated by other getUpdates request" in r["description"]:
+                raise self.ConflictQueryException
+            raise self.GenericQueryException(
+                "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
+        return r
 
     def getUpdates(self, a=None):
         # p = self.g
@@ -62,7 +74,9 @@ class TelegramBot:
     def bootstrap(self):
         r = self.getUpdates()
         if not r["ok"]:
-            raise self.QueryException(
+            if "Conflict: terminated by other getUpdates request" in r["description"]:
+                raise self.ConflictQueryException
+            raise self.GenericQueryException(
                 "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
         if len(r["result"]) > 0:
             self.last_update = r["result"][0]["update_id"]
@@ -87,12 +101,17 @@ class TelegramBot:
             threading.Thread.__init__(self)
             self.poll = poll
             self.active = True
+            self.verbose = False
             self.delay = delay
             self.parent_thread = parent_thread
 
         def run(self):
             while self.active and self.parent_thread.is_alive():
-                self.poll()
+                try:
+                    self.poll()
+                except self.parent_thread.ConflictQueryException:
+                    if self.verbose:
+                        print("[DAEMON]: Query in conflict, continuing.")
                 sleep(self.delay)
                 # print("Polled")
 
@@ -114,7 +133,7 @@ class TelegramBot:
         else:
             return False
 
-    def sendMessage(self, user, body, a=None):
+    def sendMessage(self, user, body, parse_mode="markdown", a=None):
         assert type(user) == TelegramBot.User
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
@@ -122,7 +141,7 @@ class TelegramBot:
             assert type(a) == dict
         else:
             a = {}
-        p = {"chat_id": user.id, "text": body}
+        p = {"chat_id": user.id, "text": body, "parse_mode": parse_mode}
         p.update(a)
         return self.query("sendMessage", p)
         # return True if telegram does, otherwise False
@@ -198,7 +217,7 @@ class TelegramBot:
                 for i in [k for k in self.updates if k.message.from_.id in chat_id]:
                     yield self.updates.pop(self.updates.index(i))
             else:
-                raise TypeError("the provided id must be int or list")
+                raise self.TypeError("the provided id must be int or list")
 
     class Update:
         def __init__(self, u):
@@ -208,7 +227,6 @@ class TelegramBot:
                     self.content = self.Message(u[i])
                     self.type = i
                     break
-
             self.raw = u
 
         class Message:
@@ -260,15 +278,15 @@ class TelegramBot:
         def __init__(self, c):
             print(c)
             self.id = c["id"]
-            for i in dict([ (k, c[k]) for k in c if k not in "id"]):
+            for i in dict([(k, c[k]) for k in c if k not in "id"]):
                 self.__setattr__(i, c[i])
+            self.raw = c
 
     class Photo(File):
         def __init__(self, f):
             File.__init__(self, f)
             self.height = f["height"]
             self.width = f["width"]
-
             self.raw = f
 
     class Sticker(File):
@@ -278,3 +296,5 @@ class TelegramBot:
             self.width = f["width"]
             for i in dict([(k, f[k]) for k in f if k not in "height width file_id"]):
                 self.__setattr__(i, f[i])
+
+            self.raw = f
