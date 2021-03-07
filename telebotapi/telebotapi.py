@@ -111,7 +111,7 @@ class TelegramBot:
                     self.poll()
                 except self.parent_thread.ConflictQueryException:
                     if self.verbose:
-                        print("[DAEMON]: Query in conflict, continuing.")
+                        print("[DAEMON]: Query conflicted, continuing.")
                 sleep(self.delay)
                 # print("Polled")
 
@@ -134,7 +134,7 @@ class TelegramBot:
             return False
 
     def sendMessage(self, user, body, parse_mode="markdown", a=None):
-        assert type(user) == TelegramBot.User
+        assert type(user) == TelegramBot.User or type(user) == TelegramBot.Chat
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
         if a is not None:
@@ -276,7 +276,6 @@ class TelegramBot:
 
     class Chat:
         def __init__(self, c):
-            print(c)
             self.id = c["id"]
             for i in dict([(k, c[k]) for k in c if k not in "id"]):
                 self.__setattr__(i, c[i])
