@@ -339,3 +339,12 @@ class TelegramBot:
             File.__init__(self, f)
             self.file_name = f["file_name"]
             self.mime = f["mime_type"]
+
+
+if __name__ == "__main__":
+    from sys import argv
+    if len(argv) < 2:
+        print("No token supplied")
+        exit()
+    t = TelegramBot(argv[1])
+    t.bootstrap()
