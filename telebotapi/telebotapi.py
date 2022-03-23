@@ -148,6 +148,7 @@ class TelegramBot:
             a = {}
         p = {"chat_id": user.id, "text": body, "parse_mode": parse_mode}
         p.update(a)
+        print(json.dumps(p, indent=4))
         return self.query("sendMessage", p)
         # return True if telegram does, otherwise False
 
@@ -266,15 +267,25 @@ class TelegramBot:
     class Update:
         def __init__(self, u):
             self.id = u["update_id"]
-            for i in ("message", "edited_message", "channel_post", "edited_channel_post"):
+            for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query"):
+
                 if i in u:
                     if "text" in u[i]:
                         self.content = self.Text(u[i])
                     elif "photo" in u[i]:
                         self.content = self.Photo(u[i])
+                    elif "message" in u[i]:
+                        print("================= SES ================")
+                        self.content = self.CallbackQuery(u[i])
                     self.type = i
-                break
+                    break
             self.raw = u
+
+        def __str__(self):
+            return f"Update(content={self.content}, type=\"{self.type}\")"
+
+        def __repr__(self):
+            return str(self)
 
         class Message:
             def __init__(self, c):
@@ -298,6 +309,12 @@ class TelegramBot:
                         self.__setattr__(i, e[i])
                     self.raw = e
 
+                def __str__(self):
+                    return f"Entity(\"{self.text}\", o={self.offset}, l={self.length}, type=\"{self.type}\")"
+
+                def __repr__(self):
+                    return str(self)
+
         class Text(Message):
             def __init__(self, c):
                 TelegramBot.Update.Message.__init__(self, c)
@@ -307,6 +324,31 @@ class TelegramBot:
                 for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities"]):
                     self.__setattr__(i, c[i])
                 self.raw = c
+
+            def __str__(self):
+                return f"Text(\"{self.text}\", chat={self.chat})"
+
+            def __repr__(self):
+                return str(self)
+            
+        class CallbackQuery:
+            def __init__(self, c):
+                self.type = "callback_query"
+                self.message = TelegramBot.Update.Message(c["message"])
+                self.chat_instance = c["chat_instance"]
+                self.data = c["data"]
+
+                for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities"]):
+                    self.__setattr__(i, c[i])
+                self.raw = c
+
+            def __str__(self):
+                return f"Text(\"{self.text}\", chat={self.chat})"
+
+            def __repr__(self):
+                return str(self)
+
+            
 
         class Photo(Message):
             def __init__(self, c):
@@ -319,6 +361,12 @@ class TelegramBot:
                     for i in c["caption_entities"]:
                         self.entities.append(self.Entity(i, self.text))
 
+            def __str__(self):
+                return f"Photo({self.photo})"
+
+            def __repr__(self):
+                return str(self)
+
     class Chat:
         def __init__(self, c):
             self.id = c["id"]
@@ -327,10 +375,22 @@ class TelegramBot:
                     self.__setattr__(i, c[i])
             self.raw = c
 
+        def __str__(self):
+            return f"Chat({self.id})"
+
+        def __repr__(self):
+            return str(self)
+
     class User(Chat):
         def __init__(self, u):
             TelegramBot.Chat.__init__(self, u)
             self.raw = u
+
+        def __str__(self):
+            return f"User({self.id})"
+
+        def __repr__(self):
+            return str(self)
 
     class Photo(File):
         def __init__(self, f):
