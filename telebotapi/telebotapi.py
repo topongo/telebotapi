@@ -144,6 +144,7 @@ class TelegramBot:
             a = {}
         p = {"chat_id": user.id, "text": body, "parse_mode": parse_mode}
         p.update(a)
+        print(json.dumps(p, indent=4))
         return self.query("sendMessage", p)
         # return True if telegram does, otherwise False
 
@@ -209,6 +210,7 @@ class TelegramBot:
         p.update(a)
         return self.query("forwardMessage", p)
 
+
     def chat_from_user(self, user):
         assert type(user) == TelegramBot.User
         p = {"chat_id": user.id}
@@ -255,14 +257,18 @@ class TelegramBot:
     class Update:
         def __init__(self, u):
             self.id = u["update_id"]
-            for i in ("message", "edited_message", "channel_post", "edited_channel_post"):
+            for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query"):
+
                 if i in u:
                     if "text" in u[i]:
                         self.content = self.Text(u[i])
                     elif "photo" in u[i]:
                         self.content = self.Photo(u[i])
+                    elif "message" in u[i]:
+                        print("================= SES ================")
+                        self.content = self.CallbackQuery(u[i])
                     self.type = i
-                break
+                    break
             self.raw = u
 
         def __str__(self):
@@ -314,6 +320,25 @@ class TelegramBot:
 
             def __repr__(self):
                 return str(self)
+            
+        class CallbackQuery:
+            def __init__(self, c):
+                self.type = "callback_query"
+                self.message = TelegramBot.Update.Message(c["message"])
+                self.chat_instance = c["chat_instance"]
+                self.data = c["data"]
+
+                for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities"]):
+                    self.__setattr__(i, c[i])
+                self.raw = c
+
+            def __str__(self):
+                return f"Text(\"{self.text}\", chat={self.chat})"
+
+            def __repr__(self):
+                return str(self)
+
+            
 
         class Photo(Message):
             def __init__(self, c):
