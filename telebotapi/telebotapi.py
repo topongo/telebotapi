@@ -57,7 +57,8 @@ class TelegramBot:
         while True:
             try:
                 self.busy = True
-                r = post("https://api.telegram.org/bot{0}/{1}".format(self.token, method), data=params, headers=headers).json()
+                r = post("https://api.telegram.org/bot{0}/{1}".format(self.token, method), data=params,
+                         headers=headers).json()
                 self.busy = False
                 break
             except timeout:
@@ -111,10 +112,13 @@ class TelegramBot:
             self.parent_thread = parent_thread
 
         def run(self):
-            while self.active and self.parent_thread.is_alive():
-                self.poll()
-                sleep(self.delay)
-                # print("Polled")
+            try:
+                while self.active and self.parent_thread.is_alive():
+                    self.poll()
+                    sleep(self.delay)
+                    # print("Polled")
+            except KeyboardInterrupt:
+                pass
 
     def restart_daemon(self):
         if not self.bootstrapped:
@@ -182,13 +186,19 @@ class TelegramBot:
             files = None
             p = {"chat_id": user.id, "document": document.id}
         else:
-            files = {"document": (["document", name][type(name) is str], document, ["application/octet-stream", mime][type(mime) is str])}
+            files = {
+                "document": (
+                    ["document", name][type(name) is str],
+                    document,
+                    ["application/octet-stream", mime][type(mime) is str]
+                )
+            }
             p = {"chat_id": user.id}
         p.update(a)
         while True:
             try:
                 r = post("https://api.telegram.org/bot{0}/sendDocument".format(self.token),
-                                  files=files, data=p).json()
+                         files=files, data=p).json()
                 break
             except Timeout:
                 print("Telegram timed out, retrying...")
@@ -208,7 +218,6 @@ class TelegramBot:
         p = {"chat_id": chat_out.id, "from_chat_id": chat_in.id, "message_id": message.id}
         p.update(a)
         return self.query("forwardMessage", p)
-
 
     def chat_from_user(self, user):
         assert type(user) == TelegramBot.User
@@ -243,7 +252,8 @@ class TelegramBot:
             if type(from_) is TelegramBot.User or type(from_) is TelegramBot.Chat:
                 for i in [k for k in self.updates if k.message.from_.id == from_.id]:
                     yield self.updates.pop(self.updates.index(i))
-            elif type(from_) == list and all((type(i) is TelegramBot.Chat or type(i) is TelegramBot.User for i in from_)):
+            elif type(from_) == list and \
+                    all((type(i) is TelegramBot.Chat or type(i) is TelegramBot.User for i in from_)):
                 for i in [k for k in self.updates if k.message.from_.id in from_.id]:
                     yield self.updates.pop(self.updates.index(i))
             else:
