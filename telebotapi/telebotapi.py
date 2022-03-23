@@ -209,7 +209,6 @@ class TelegramBot:
         p.update(a)
         return self.query("forwardMessage", p)
 
-
     def chat_from_user(self, user):
         assert type(user) == TelegramBot.User
         p = {"chat_id": user.id}
@@ -266,6 +265,12 @@ class TelegramBot:
                 break
             self.raw = u
 
+        def __str__(self):
+            return f"Update(content={self.content}, type=\"{self.type}\")"
+
+        def __repr__(self):
+            return str(self)
+
         class Message:
             def __init__(self, c):
                 self.id = c["message_id"]
@@ -288,6 +293,12 @@ class TelegramBot:
                         self.__setattr__(i, e[i])
                     self.raw = e
 
+                def __str__(self):
+                    return f"Entity(\"{self.text}\", o={self.offset}, l={self.length}, type=\"{self.type}\")"
+
+                def __repr__(self):
+                    return str(self)
+
         class Text(Message):
             def __init__(self, c):
                 TelegramBot.Update.Message.__init__(self, c)
@@ -297,6 +308,12 @@ class TelegramBot:
                 for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities"]):
                     self.__setattr__(i, c[i])
                 self.raw = c
+
+            def __str__(self):
+                return f"Text(\"{self.text}\", chat={self.chat})"
+
+            def __repr__(self):
+                return str(self)
 
         class Photo(Message):
             def __init__(self, c):
@@ -309,6 +326,12 @@ class TelegramBot:
                     for i in c["caption_entities"]:
                         self.entities.append(self.Entity(i, self.text))
 
+            def __str__(self):
+                return f"Photo({self.photo})"
+
+            def __repr__(self):
+                return str(self)
+
     class Chat:
         def __init__(self, c):
             self.id = c["id"]
@@ -317,10 +340,22 @@ class TelegramBot:
                     self.__setattr__(i, c[i])
             self.raw = c
 
+        def __str__(self):
+            return f"Chat({self.id})"
+
+        def __repr__(self):
+            return str(self)
+
     class User(Chat):
         def __init__(self, u):
             TelegramBot.Chat.__init__(self, u)
             self.raw = u
+
+        def __str__(self):
+            return f"User({self.id})"
+
+        def __repr__(self):
+            return str(self)
 
     class Photo(File):
         def __init__(self, f):
