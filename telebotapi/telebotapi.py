@@ -138,8 +138,9 @@ class TelegramBot:
         else:
             return False
 
-    def sendMessage(self, user, body, parse_mode="markdown", a=None):
+    def sendMessage(self, user, body, parse_mode="markdown", reply_markup=None, a=None):
         assert type(user) == TelegramBot.User or type(user) == TelegramBot.Chat
+        assert type(reply_markup) is str or reply_markup is None
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
         if a is not None:
@@ -148,9 +149,29 @@ class TelegramBot:
             a = {}
         p = {"chat_id": user.id, "text": body, "parse_mode": parse_mode}
         p.update(a)
-        print(json.dumps(p, indent=4))
+        if reply_markup:
+            a = {
+                "reply_markup": reply_markup
+            }
+            p.update(a)
         return self.query("sendMessage", p)
         # return True if telegram does, otherwise False
+
+    def editMessageReplyMarkup(self, reply_markup, message=None, a=None):
+        if not message:
+            raise TypeError("message parameter must be specified.")
+        if not isinstance(reply_markup, str):
+            raise TypeError("reply_markup must be of type str")
+        if not isinstance(message, TelegramBot.Update.Message):
+            raise TypeError("message must be of type TelegramBot.Update.Message")
+        data = {
+            "chat_id": message.chat.id,
+            "message_id": message.id,
+            "reply_markup": reply_markup
+        }
+        if a is not None:
+            data.update(a)
+        return self.query("editMessageReplyMarkup", data)
 
     def sendPhoto(self, user, photo, a=None):
         assert type(user) == TelegramBot.User
@@ -238,7 +259,7 @@ class TelegramBot:
             if delay is not None or active and not self.daemon.is_alive():
                 self.restart_daemon()
 
-    def has_updates(self):
+    def has_updates(self) -> bool:
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
         return len(self.updates) > 0
@@ -267,6 +288,7 @@ class TelegramBot:
     class Update:
         def __init__(self, u):
             self.id = u["update_id"]
+            """
             for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query"):
 
                 if i in u:
@@ -275,10 +297,11 @@ class TelegramBot:
                     elif "photo" in u[i]:
                         self.content = self.Photo(u[i])
                     elif "message" in u[i]:
-                        print("================= SES ================")
                         self.content = self.CallbackQuery(u[i])
                     self.type = i
                     break
+            """
+            self.content, self.type = TelegramBot.Update.Message.detect_type(None, u)
             self.raw = u
 
         def __str__(self):
@@ -293,11 +316,28 @@ class TelegramBot:
                 if "from" in c:
                     self.from_ = TelegramBot.User(c["from"])
                 self.chat = TelegramBot.Chat(c["chat"])
+                if "reply_to_message" in c:
+                    self.reply_to_message = TelegramBot.Update.Message.detect_type(None, {"message": c["reply_to_message"]})
                 self.entities = []
                 if "entities" in c:
                     self.text = c["text"]
                     for i in c["entities"]:
                         self.entities.append(self.Entity(i, self.text))
+
+            def detect_type(self, u):
+                print(u)
+                for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query"):
+                    if i in u:
+                        if "text" in u[i]:
+                            print("===========TEXT===========")
+                            return TelegramBot.Update.Text(u[i]), i
+                        elif "photo" in u[i]:
+                            return TelegramBot.Update.Photo(u[i]), i
+                        elif "message" in u[i]:
+                            return TelegramBot.Update.CallbackQuery(u[i]), i
+                        else:
+                            raise TypeError(f"Malformed data: {u[i]}")
+                raise TypeError(f"Unrecognized data: {u}")
 
             class Entity:
                 def __init__(self, e, text):
@@ -321,7 +361,8 @@ class TelegramBot:
                 self.type = "text"
                 self.text = c["text"]
 
-                for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities"]):
+                for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities "
+                                                                "reply_to_message"]):
                     self.__setattr__(i, c[i])
                 self.raw = c
 
@@ -330,25 +371,34 @@ class TelegramBot:
 
             def __repr__(self):
                 return str(self)
-            
+
         class CallbackQuery:
             def __init__(self, c):
+                self.id = c["id"]
+                if "from" in c:
+                    self.from_ = TelegramBot.User(c["from"])
+                self.entities = []
+                if "entities" in c:
+                    self.text = c["text"]
+                    for i in c["entities"]:
+                        self.entities.append(TelegramBot.Update.Message.Entity(i, self.text))
+
                 self.type = "callback_query"
-                self.message = TelegramBot.Update.Message(c["message"])
+                self.original_message = TelegramBot.Update.Message.detect_type(None, {"message": c["message"]})[0]
                 self.chat_instance = c["chat_instance"]
                 self.data = c["data"]
 
-                for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities"]):
+                for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities"
+                                                                "chat_instance data message reply_to_message"]):
                     self.__setattr__(i, c[i])
                 self.raw = c
 
             def __str__(self):
-                return f"Text(\"{self.text}\", chat={self.chat})"
+                return f"CallbackQuery(id={self.id}, chat_instance={self.chat_instance}, " \
+                       f"original_message={self.original_message})"
 
             def __repr__(self):
                 return str(self)
-
-            
 
         class Photo(Message):
             def __init__(self, c):
@@ -370,7 +420,7 @@ class TelegramBot:
     class Chat:
         def __init__(self, c):
             self.id = c["id"]
-            for i in ("last_name", "username", "language_code", "first_name", "is_bot"):
+            for i in ("last_name", "type", "username", "language_code", "first_name", "is_bot"):
                 if i in c:
                     self.__setattr__(i, c[i])
             self.raw = c
@@ -385,6 +435,9 @@ class TelegramBot:
         def __init__(self, u):
             TelegramBot.Chat.__init__(self, u)
             self.raw = u
+
+        def by_id(self, i):
+            return TelegramBot.User({"id": i})
 
         def __str__(self):
             return f"User({self.id})"
@@ -413,6 +466,7 @@ class TelegramBot:
 
 if __name__ == "__main__":
     from sys import argv
+
     if len(argv) < 2:
         print("No token supplied")
         exit()
