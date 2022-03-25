@@ -138,9 +138,10 @@ class TelegramBot:
         else:
             return False
 
-    def sendMessage(self, user, body, parse_mode="markdown", reply_markup=None, a=None):
+    def sendMessage(self, user, body, parse_mode="markdown", reply_markup=None, reply_to_message=None, a=None):
         assert type(user) == TelegramBot.User or type(user) == TelegramBot.Chat
         assert type(reply_markup) is str or reply_markup is None
+        assert reply_to_message is None or isinstance(reply_to_message, TelegramBot.Update.Message)
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
         if a is not None:
@@ -152,6 +153,11 @@ class TelegramBot:
         if reply_markup:
             a = {
                 "reply_markup": reply_markup
+            }
+            p.update(a)
+        if reply_to_message:
+            a = {
+                "reply_to_message_id": reply_to_message.id
             }
             p.update(a)
         return self.query("sendMessage", p)
@@ -317,7 +323,8 @@ class TelegramBot:
                     self.from_ = TelegramBot.User(c["from"])
                 self.chat = TelegramBot.Chat(c["chat"])
                 if "reply_to_message" in c:
-                    self.reply_to_message = TelegramBot.Update.Message.detect_type(None, {"message": c["reply_to_message"]})
+                    self.reply_to_message = TelegramBot.Update.Message.detect_type(None,
+                                                                                   {"message": c["reply_to_message"]})[0]
                 self.entities = []
                 if "entities" in c:
                     self.text = c["text"]
@@ -325,11 +332,9 @@ class TelegramBot:
                         self.entities.append(self.Entity(i, self.text))
 
             def detect_type(self, u):
-                print(u)
                 for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query"):
                     if i in u:
                         if "text" in u[i]:
-                            print("===========TEXT===========")
                             return TelegramBot.Update.Text(u[i]), i
                         elif "photo" in u[i]:
                             return TelegramBot.Update.Photo(u[i]), i
