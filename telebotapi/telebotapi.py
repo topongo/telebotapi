@@ -65,6 +65,9 @@ class TelegramBot:
                 print("Telegram timed out, retrying...")
                 self.busy = False
         if not r["ok"]:
+            if "message is not modified" in r["description"]:
+                print(":: warn: message not modified.")
+                return r
             raise self.GenericQueryException(
                 "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
         return r
@@ -81,6 +84,7 @@ class TelegramBot:
 
     def bootstrap(self):
         r = self.getUpdates()
+        self.id = self.query()
         if not r["ok"]:
             raise self.GenericQueryException(
                 "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
@@ -161,6 +165,30 @@ class TelegramBot:
             }
             p.update(a)
         return self.query("sendMessage", p)
+        # return True if telegram does, otherwise False
+
+    def editMessageText(self, message, body, parse_mode="markdown", reply_markup=None, a=None):
+        assert isinstance(message, TelegramBot.Update.Message) or isinstance(message, TelegramBot.Update.CallbackQuery)
+        assert type(reply_markup) is str or reply_markup is None
+        if not self.bootstrapped:
+            raise self.BootstrapException("perform bootstrap before other operations.")
+        if a is not None:
+            assert type(a) == dict
+        else:
+            a = {}
+        p = {
+            "chat_id": message.chat.id,
+            "message_id": message.id,
+            "text": body,
+            "parse_mode": parse_mode
+        }
+        p.update(a)
+        if reply_markup:
+            a = {
+                "reply_markup": reply_markup
+            }
+            p.update(a)
+        return self.query("editMessageText", p)
         # return True if telegram does, otherwise False
 
     def editMessageReplyMarkup(self, reply_markup, message=None, a=None):
@@ -246,6 +274,22 @@ class TelegramBot:
         p = {"chat_id": chat_out.id, "from_chat_id": chat_in.id, "message_id": message.id}
         p.update(a)
         return self.query("forwardMessage", p)
+
+    def answerCallbackQuery(self, callback_query, text, show_alert=None, a=None):
+        assert isinstance(callback_query, TelegramBot.Update.CallbackQuery)
+        assert isinstance(text, str)
+        assert isinstance(show_alert, bool) or show_alert is None
+        if not self.bootstrapped:
+            raise self.BootstrapException("perform bootstrap before other operations.")
+        if a is not None:
+            assert type(a) == dict
+        else:
+            a = {}
+        if show_alert is None:
+            show_alert = False
+        p = {"callback_query_id": callback_query.id, "text": text, "show_alert": show_alert}
+        p.update(a)
+        return self.query("answerCallbackQuery", p)
 
     def chat_from_user(self, user):
         assert type(user) == TelegramBot.User
@@ -382,6 +426,7 @@ class TelegramBot:
                 self.id = c["id"]
                 if "from" in c:
                     self.from_ = TelegramBot.User(c["from"])
+                self.chat = c["chat"]
                 self.entities = []
                 if "entities" in c:
                     self.text = c["text"]
@@ -435,6 +480,11 @@ class TelegramBot:
 
         def __repr__(self):
             return str(self)
+
+        def __eq__(self, other):
+            if not isinstance(other, TelegramBot.Chat):
+                raise TypeError(other)
+            return self.id == other.id
 
     class User(Chat):
         def __init__(self, u):
