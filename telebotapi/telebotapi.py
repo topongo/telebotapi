@@ -2,10 +2,9 @@ import threading
 import json
 from socket import timeout
 from requests import get, post
-from requests.exceptions import Timeout
+from requests.exceptions import ConnectionError, ConnectTimeout, Timeout
 from urllib.parse import urlencode
 from time import sleep
-
 
 class File:
     def __init__(self, f):
@@ -27,10 +26,10 @@ class TelegramBot:
         self.last_update = 0
         self.updated = False
         self.name = name
-        self.daemonDelay = 1
+        self.daemon_delay = 1
         self.bootstrapped = False
-        self.current_thread = threading.currentThread()
-        self.daemon = self.Daemon(self.poll, self.current_thread, self.daemonDelay)
+        self.current_thread = threading.current_thread()
+        self.daemon = self.Daemon(self.poll, self.current_thread, self.daemon_delay)
 
     class TokenException(Exception):
         pass
@@ -58,10 +57,10 @@ class TelegramBot:
             try:
                 self.busy = True
                 r = post("https://api.telegram.org/bot{0}/{1}".format(self.token, method), data=params,
-                         headers=headers).json()
+                         headers=headers, timeout=5).json()
                 self.busy = False
                 break
-            except timeout:
+            except (timeout, Timeout, ConnectTimeout, ConnectionError):
                 print("Telegram timed out, retrying...")
                 self.busy = False
         if not r["ok"]:
@@ -84,7 +83,6 @@ class TelegramBot:
 
     def bootstrap(self):
         r = self.getUpdates()
-        self.id = self.query()
         if not r["ok"]:
             raise self.GenericQueryException(
                 "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
@@ -130,7 +128,7 @@ class TelegramBot:
         if self.daemon.is_alive():
             self.daemon.active = False
             self.daemon.join()
-        self.daemon = self.Daemon(self.poll, self.current_thread, self.daemonDelay)
+        self.daemon = self.Daemon(self.poll, self.current_thread, self.daemon_delay)
         self.daemon.start()
 
     def news(self):
@@ -207,6 +205,16 @@ class TelegramBot:
             data.update(a)
         return self.query("editMessageReplyMarkup", data)
 
+    def deleteMessage(self, message, a=None):
+        assert isinstance(message, TelegramBot.Update.Message)
+        p = {
+            "chat_id": message.chat.id,
+            "message_id": message.id
+        }
+        if a:
+            p.update(a)
+        return self.query("deleteMessage", p)
+
     def sendPhoto(self, user, photo, a=None):
         assert type(user) == TelegramBot.User
         assert type(photo) == TelegramBot.Photo
@@ -254,9 +262,9 @@ class TelegramBot:
         while True:
             try:
                 r = post("https://api.telegram.org/bot{0}/sendDocument".format(self.token),
-                         files=files, data=p).json()
+                         files=files, data=p, timeout=5).json()
                 break
-            except Timeout:
+            except (timeout, Timeout, ConnectTimeout, ConnectionError):
                 print("Telegram timed out, retrying...")
         if not r["ok"]:
             raise self.GenericQueryException(
@@ -302,8 +310,8 @@ class TelegramBot:
 
     def daemon_remote(self, active, delay):
         self.daemon.active = active
-        if delay is not None and delay != self.daemonDelay:
-            self.daemonDelay = delay
+        if delay is not None and delay != self.daemon_delay:
+            self.daemon_delay = delay
 
         if self.bootstrapped:
             if delay is not None or active and not self.daemon.is_alive():
@@ -319,15 +327,18 @@ class TelegramBot:
             raise self.BootstrapException("perform bootstrap before other operations.")
         if from_ is None:
             for i in range(len(self.updates)):
-                yield self.updates.pop(0)
+                tmp = self.updates.pop(0)
+                yield tmp
         else:
             if type(from_) is TelegramBot.User or type(from_) is TelegramBot.Chat:
                 for i in [k for k in self.updates if k.message.from_.id == from_.id]:
-                    yield self.updates.pop(self.updates.index(i))
+                    tmp = self.updates.pop(self.updates.index(i))
+                    yield tmp
             elif type(from_) == list and \
                     all((type(i) is TelegramBot.Chat or type(i) is TelegramBot.User for i in from_)):
                 for i in [k for k in self.updates if k.message.from_.id in from_.id]:
-                    yield self.updates.pop(self.updates.index(i))
+                    tmp = self.updates.pop(self.updates.index(i))
+                    yield tmp
             else:
                 raise self.TypeError(
                     f"Parameter \"from_\" must be TelegramBot.User or TelegramBot.Chat {type(from_)} provided.")
@@ -426,7 +437,6 @@ class TelegramBot:
                 self.id = c["id"]
                 if "from" in c:
                     self.from_ = TelegramBot.User(c["from"])
-                self.chat = c["chat"]
                 self.entities = []
                 if "entities" in c:
                     self.text = c["text"]
@@ -435,6 +445,7 @@ class TelegramBot:
 
                 self.type = "callback_query"
                 self.original_message = TelegramBot.Update.Message.detect_type(None, {"message": c["message"]})[0]
+                self.chat = self.original_message.chat
                 self.chat_instance = c["chat_instance"]
                 self.data = c["data"]
 
