@@ -53,15 +53,18 @@ class TelegramBot:
         while self.busy:
             sleep(0.5)
 
+        delay = 1
         while True:
             try:
                 self.busy = True
                 r = post("https://api.telegram.org/bot{0}/{1}".format(self.token, method), data=params,
                          headers=headers, timeout=5).json()
-                self.busy = False
                 break
             except (timeout, Timeout, ConnectTimeout, ConnectionError):
-                print("Telegram timed out, retrying...")
+                print(f"Telegram timed out, retrying in {delay} seconds...")
+                sleep(delay)
+                delay *= 2
+            finally:
                 self.busy = False
         if not r["ok"]:
             if "message is not modified" in r["description"]:
@@ -162,7 +165,7 @@ class TelegramBot:
                 "reply_to_message_id": reply_to_message.id
             }
             p.update(a)
-        return self.query("sendMessage", p)
+        return TelegramBot.Update.Message.detect_type(None, self.query("sendMessage", p))[0]
         # return True if telegram does, otherwise False
 
     def editMessageText(self, message, body, parse_mode="markdown", reply_markup=None, a=None):
@@ -387,7 +390,8 @@ class TelegramBot:
                         self.entities.append(self.Entity(i, self.text))
 
             def detect_type(self, u):
-                for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query"):
+                for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query"
+                          "result"):
                     if i in u:
                         if "text" in u[i]:
                             return TelegramBot.Update.Text(u[i]), i
