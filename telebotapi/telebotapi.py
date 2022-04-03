@@ -390,7 +390,7 @@ class TelegramBot:
                         self.entities.append(self.Entity(i, self.text))
 
             def detect_type(self, u):
-                for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query"
+                for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query",
                           "result"):
                     if i in u:
                         if "text" in u[i]:
