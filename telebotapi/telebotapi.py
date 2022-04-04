@@ -400,7 +400,9 @@ class TelegramBot:
                         elif "message" in u[i]:
                             return TelegramBot.Update.CallbackQuery(u[i]), i
                         else:
-                            raise TypeError(f"Malformed data: {u[i]}")
+                            # return generic message
+                            return TelegramBot.Update.Message(u[i]), i
+                            # raise TypeError(f"Malformed data: {u[i]}")
                 raise TypeError(f"Unrecognized data: {u}")
 
             class Entity:
