@@ -6,6 +6,7 @@ from requests.exceptions import ConnectionError, ConnectTimeout, Timeout
 from urllib.parse import urlencode
 from time import sleep
 
+
 class File:
     def __init__(self, f):
         self.id = f["file_id"]
@@ -14,7 +15,7 @@ class File:
 
 
 class TelegramBot:
-    def __init__(self, token, name=None):
+    def __init__(self, token, name=None, safe_mode=None):
         if len(token) == 46:
             self.token = token
         else:
@@ -30,6 +31,7 @@ class TelegramBot:
         self.bootstrapped = False
         self.current_thread = threading.current_thread()
         self.daemon = self.Daemon(self.poll, self.current_thread, self.daemon_delay)
+        self.safe_mode = safe_mode
 
     class TokenException(Exception):
         pass
@@ -103,9 +105,15 @@ class TelegramBot:
             if len(p["result"]) > 0:
                 self.updated = True
                 for u in p["result"]:
-                    self.updates.append(self.Update(u))
-                self.last_update = self.updates[-1].id + 1
-                # print(self.g)
+                    try:
+                        self.updates.append(self.Update(u))
+                    except TypeError as e:
+                        if not self.safe_mode:
+                            raise e
+                if len(self.updates) == 0:
+                    self.last_update = p["result"][-1]["update_id"]
+                else:
+                    self.last_update = self.updates[-1].id + 1
 
     class Daemon(threading.Thread):
         def __init__(self, poll, parent_thread, delay):
@@ -165,7 +173,7 @@ class TelegramBot:
                 "reply_to_message_id": reply_to_message.id
             }
             p.update(a)
-        return TelegramBot.Update.Message.detect_type(None, self.query("sendMessage", p))[0]
+        return TelegramBot.Update.Message.detect_type(self.query("sendMessage", p))[0]
         # return True if telegram does, otherwise False
 
     def editMessageText(self, message, body, parse_mode="markdown", reply_markup=None, a=None):
@@ -365,7 +373,7 @@ class TelegramBot:
                     self.type = i
                     break
             """
-            self.content, self.type = TelegramBot.Update.Message.detect_type(None, u)
+            self.content, self.type = TelegramBot.Update.Message.detect_type(u)
             self.raw = u
 
         def __str__(self):
@@ -381,15 +389,15 @@ class TelegramBot:
                     self.from_ = TelegramBot.User(c["from"])
                 self.chat = TelegramBot.Chat(c["chat"])
                 if "reply_to_message" in c:
-                    self.reply_to_message = TelegramBot.Update.Message.detect_type(None,
-                                                                                   {"message": c["reply_to_message"]})[0]
+                    self.reply_to_message = TelegramBot.Update.Message.detect_type({"message": c["reply_to_message"]})[0]
                 self.entities = []
                 if "entities" in c:
                     self.text = c["text"]
                     for i in c["entities"]:
                         self.entities.append(self.Entity(i, self.text))
 
-            def detect_type(self, u):
+            @staticmethod
+            def detect_type(u):
                 for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query",
                           "result"):
                     if i in u:
@@ -450,7 +458,7 @@ class TelegramBot:
                         self.entities.append(TelegramBot.Update.Message.Entity(i, self.text))
 
                 self.type = "callback_query"
-                self.original_message = TelegramBot.Update.Message.detect_type(None, {"message": c["message"]})[0]
+                self.original_message = TelegramBot.Update.Message.detect_type({"message": c["message"]})[0]
                 self.chat = self.original_message.chat
                 self.chat_instance = c["chat_instance"]
                 self.data = c["data"]
