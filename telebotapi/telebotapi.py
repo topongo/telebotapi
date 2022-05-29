@@ -516,7 +516,8 @@ class TelegramBot:
             TelegramBot.Chat.__init__(self, u)
             self.raw = u
 
-        def by_id(self, i):
+        @staticmethod
+        def by_id(i):
             return TelegramBot.User({"id": i})
 
         def __str__(self):
