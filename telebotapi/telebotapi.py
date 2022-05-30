@@ -10,6 +10,7 @@ from time import sleep
 class File:
     def __init__(self, f):
         self.id = f["file_id"]
+        self.unique_id = f["file_unique_id"]
         self.size = f["file_size"]
         self.raw = f
 
@@ -431,13 +432,16 @@ class TelegramBot:
 
         class Text(Message):
             def __init__(self, c):
-                TelegramBot.Update.Message.__init__(self, c)
+                super().__init__(c)
                 self.type = "text"
                 self.text = c["text"]
 
-                for i in dict([(k, c[k]) for k in c if k not in "id text from chat entities caption caption_entities "
-                                                                "reply_to_message"]):
-                    self.__setattr__(i, c[i])
+                for k, v in [
+                    (k, v)
+                    for k, v in c.items()
+                    if k not in "id text from chat entities caption caption_entities reply_to_message"
+                ]:
+                    self.__setattr__(k, v)
                 self.raw = c
 
             def __str__(self):
@@ -445,6 +449,21 @@ class TelegramBot:
 
             def __repr__(self):
                 return str(self)
+
+        class Audio(Message, File):
+            def __init__(self, c):
+                super().__init__(c)
+                File.__init__(self, c)
+                self.duration = c["duration"]
+                for k, v in [
+                    (k, v)
+                    for k, v in c.items()
+                    if k not in "performer title file_name mime_type thumb"
+                ]:
+                    if k == "thumb":
+                        self.__setattr__(k, TelegramBot.Photo(v))
+                    else:
+                        self.__setattr__(k, v)
 
         class CallbackQuery:
             def __init__(self, c):
@@ -511,14 +530,14 @@ class TelegramBot:
                 raise TypeError(other)
             return self.id == other.id
 
+        @staticmethod
+        def by_id(i):
+            return TelegramBot.Chat({"id": i})
+
     class User(Chat):
         def __init__(self, u):
             TelegramBot.Chat.__init__(self, u)
             self.raw = u
-
-        @staticmethod
-        def by_id(i):
-            return TelegramBot.User({"id": i})
 
         def __str__(self):
             return f"User({self.id})"
