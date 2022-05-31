@@ -14,6 +14,9 @@ class File:
         self.size = f["file_size"]
         self.raw = f
 
+    def __str__(self):
+        return f"File(id={self.id}, unique_id={self.unique_id}, size={self.size})"
+
 
 class TelegramBot:
     def __init__(self, token, name=None, safe_mode=None):
@@ -239,13 +242,14 @@ class TelegramBot:
         return self.query("sendPhoto", p)
 
     def sendSticker(self, user, sticker, a=None):
-        assert type(user) == TelegramBot.User
-        assert type(sticker) == TelegramBot.Sticker
+        if not isinstance(user, TelegramBot.Chat):
+            raise TypeError(user)
+        assert type(sticker) == TelegramBot.Update.Sticker
         if a is not None:
             assert type(a) == dict
         else:
             a = {}
-        p = {"chat_id": user.id, "sticker": sticker.id}
+        p = {"chat_id": user.id, "sticker": sticker.file.id}
         p.update(a)
         return self.query("sendSticker", p)
 
@@ -390,12 +394,16 @@ class TelegramBot:
                     self.from_ = TelegramBot.User(c["from"])
                 self.chat = TelegramBot.Chat(c["chat"])
                 if "reply_to_message" in c:
-                    self.reply_to_message = TelegramBot.Update.Message.detect_type({"message": c["reply_to_message"]})[0]
+                    self.reply_to_message = TelegramBot.Update.Message.detect_type({"message": c["reply_to_message"]})[
+                        0]
                 self.entities = []
                 if "entities" in c:
                     self.text = c["text"]
                     for i in c["entities"]:
                         self.entities.append(self.Entity(i, self.text))
+
+            def __str__(self):
+                return f"GenericMessage(from={self.from_}, chat={self.chat})"
 
             @staticmethod
             def detect_type(u):
@@ -408,6 +416,10 @@ class TelegramBot:
                             return TelegramBot.Update.Photo(u[i]), i
                         elif "message" in u[i]:
                             return TelegramBot.Update.CallbackQuery(u[i]), i
+                        elif "sticker" in u[i]:
+                            return TelegramBot.Update.Sticker(u[i]), i
+                        elif "audio" in u[i]:
+                            return TelegramBot.Update.Audio(u[i]), i
                         else:
                             # return generic message
                             return TelegramBot.Update.Message(u[i]), i
@@ -465,6 +477,33 @@ class TelegramBot:
                     else:
                         self.__setattr__(k, v)
 
+        class Sticker(Message, File):
+            def __init__(self, f):
+                TelegramBot.Update.Message.__init__(self, f)
+                s = f["sticker"]
+                self.file = File(s)
+                self.height = s["height"]
+                self.width = s["width"]
+
+            @staticmethod
+            def from_id(id_):
+                return TelegramBot.Update.Sticker({
+                    "message_id": 0,
+                    "chat": {
+                        "id": 0
+                    },
+                    "sticker": {
+                        "file_id": id_,
+                    },
+                })
+
+            def __repr__(self):
+                return str(self)
+
+            def __str__(self):
+                return f"Sticker(height={self.height}, width={self.width}) <derived from {self.file} and " \
+                       f"{TelegramBot.Update.Message.__str__(self)}>"
+
         class CallbackQuery:
             def __init__(self, c):
                 self.id = c["id"]
@@ -504,6 +543,14 @@ class TelegramBot:
                     self.text = c["caption"]
                     for i in c["caption_entities"]:
                         self.entities.append(self.Entity(i, self.text))
+
+            @staticmethod
+            def from_id(id_):
+                return TelegramBot.Photo({
+                    "file_id": id_,
+                    "file_unique_id": "",
+                    "file_size": ""
+                })
 
             def __str__(self):
                 return f"Photo({self.photo})"
@@ -546,12 +593,6 @@ class TelegramBot:
             return str(self)
 
     class Photo(File):
-        def __init__(self, f):
-            File.__init__(self, f)
-            self.height = f["height"]
-            self.width = f["width"]
-
-    class Sticker(File):
         def __init__(self, f):
             File.__init__(self, f)
             self.height = f["height"]
