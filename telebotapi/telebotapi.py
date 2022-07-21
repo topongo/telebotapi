@@ -230,7 +230,7 @@ class TelegramBot:
             p.update(a)
         return self.query("deleteMessage", p)
 
-    def sendPhoto(self, user, photo, a=None):
+    def sendPhoto(self, user, photo, reply_to_message=None, a=None):
         assert type(user) == TelegramBot.User
         assert type(photo) == TelegramBot.Photo
         if a is not None:
@@ -239,9 +239,14 @@ class TelegramBot:
             a = {}
         p = {"chat_id": user.id, "photo": photo.id}
         p.update(a)
+        if reply_to_message:
+            a = {
+                "reply_to_message_id": reply_to_message.id
+            }
+            p.update(a)
         return self.query("sendPhoto", p)
 
-    def sendSticker(self, user, sticker, a=None):
+    def sendSticker(self, user, sticker, reply_to_message=None, a=None):
         if not isinstance(user, TelegramBot.Chat):
             raise TypeError(user)
         assert type(sticker) == TelegramBot.Update.Sticker
@@ -251,9 +256,14 @@ class TelegramBot:
             a = {}
         p = {"chat_id": user.id, "sticker": sticker.file.id}
         p.update(a)
+        if reply_to_message:
+            a = {
+                "reply_to_message_id": reply_to_message.id
+            }
+            p.update(a)
         return self.query("sendSticker", p)
 
-    def sendDocument(self, user, document, name=None, mime=None, a=None):
+    def sendDocument(self, user, document, name=None, mime=None, reply_to_message=None, a=None):
         if type(user) is not TelegramBot.User and type(user) is not TelegramBot.Chat:
             raise TypeError(f"User argument must be TelegramBot.User or TelegramBot.Chat, {type(user)} given.")
         if issubclass(type(document), File) is not File and type(document) is not bytes:
@@ -275,6 +285,11 @@ class TelegramBot:
             }
             p = {"chat_id": user.id}
         p.update(a)
+        if reply_to_message:
+            a = {
+                "reply_to_message_id": reply_to_message.id
+            }
+            p.update(a)
         while True:
             try:
                 r = post("https://api.telegram.org/bot{0}/sendDocument".format(self.token),
@@ -287,7 +302,7 @@ class TelegramBot:
                 "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
         return r
 
-    def forwardMessage(self, chat_in, chat_out, message, a=None):
+    def forwardMessage(self, chat_in, chat_out, message, reply_to_message=None, a=None):
         assert type(chat_in) == TelegramBot.Chat
         assert type(chat_out) == TelegramBot.Chat
         assert type(message) == TelegramBot.Update.Message
@@ -296,6 +311,11 @@ class TelegramBot:
         else:
             a = {}
         p = {"chat_id": chat_out.id, "from_chat_id": chat_in.id, "message_id": message.id}
+        if reply_to_message:
+            a = {
+                "reply_to_message_id": reply_to_message.id
+            }
+            p.update(a)
         p.update(a)
         return self.query("forwardMessage", p)
 
@@ -484,6 +504,7 @@ class TelegramBot:
                 self.file = File(s)
                 self.height = s["height"]
                 self.width = s["width"]
+                self.raw = f
 
             @staticmethod
             def from_id(id_):
@@ -494,6 +515,10 @@ class TelegramBot:
                     },
                     "sticker": {
                         "file_id": id_,
+                        "file_unique_id": "",
+                        "file_size": "",
+                        "height": "",
+                        "width": ""
                     },
                 })
 
