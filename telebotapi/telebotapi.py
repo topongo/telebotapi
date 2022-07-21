@@ -19,7 +19,7 @@ class File:
 
 
 class TelegramBot:
-    def __init__(self, token, name=None, safe_mode=None):
+    def __init__(self, token, name=None, safe_mode=None, max_telegram_timeout=60):
         if len(token) == 46:
             self.token = token
         else:
@@ -36,6 +36,7 @@ class TelegramBot:
         self.current_thread = threading.current_thread()
         self.daemon = self.Daemon(self.poll, self.current_thread, self.daemon_delay)
         self.safe_mode = safe_mode
+        self.max_telegram_timeout = max_telegram_timeout
 
     class TokenException(Exception):
         pass
@@ -69,7 +70,7 @@ class TelegramBot:
             except (timeout, Timeout, ConnectTimeout, ConnectionError):
                 print(f"Telegram timed out, retrying in {delay} seconds...")
                 sleep(delay)
-                delay *= 2
+                delay = min(delay * 2, self.max_telegram_timeout)
             finally:
                 self.busy = False
         if not r["ok"]:
