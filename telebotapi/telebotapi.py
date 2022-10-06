@@ -17,6 +17,14 @@ class File:
     def __str__(self):
         return f"File(id={self.id}, unique_id={self.unique_id}, size={self.size})"
 
+    @staticmethod
+    def from_id(id_):
+        return File({
+            "file_id": id_,
+            "file_unique_id": "",
+            "file_size": 0
+        })
+
 
 class TelegramBot:
     def __init__(self, token, name=None, safe_mode=None, max_telegram_timeout=60):
@@ -232,8 +240,8 @@ class TelegramBot:
         return self.query("deleteMessage", p)
 
     def sendPhoto(self, user, photo, reply_to_message=None, a=None):
-        assert type(user) == TelegramBot.User
-        assert type(photo) == TelegramBot.Photo
+        assert isinstance(user, TelegramBot.Chat)
+        assert isinstance(photo, TelegramBot.Photo)
         if a is not None:
             assert type(a) == dict
         else:
@@ -624,6 +632,12 @@ class TelegramBot:
             File.__init__(self, f)
             self.height = f["height"]
             self.width = f["width"]
+
+        @staticmethod
+        def from_id(id_):
+            t_ = File.from_id(id_).raw
+            t_.update({"height": 0, "width": 0})
+            return TelegramBot.Photo(t_)
 
     class Document(File):
         def __init__(self, f):
