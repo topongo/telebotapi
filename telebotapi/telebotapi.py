@@ -564,7 +564,8 @@ class TelegramBot:
                 TelegramBot.Update.Message.__init__(self, c)
                 self.photos = []
                 self.type = "photo"
-                self.photo = TelegramBot.Photo(c["photo"])
+                self.thumbnail = TelegramBot.Photo(c["photo"][0])
+                self.photo = TelegramBot.Photo(c["photo"][1])
                 if "caption" in c:
                     self.text = c["caption"]
                     for i in c["caption_entities"]:
