@@ -3,10 +3,12 @@ from socket import timeout
 from requests import post
 from requests.exceptions import ConnectionError, ConnectTimeout, Timeout
 from time import sleep
-from update import Update
-from chats import Chat, User
-from messages import CallbackQuery, Message, Sticker
-from files import PhotoFile, Document, File
+from collections.abc import Iterable
+from sys import stderr
+from .update import Update
+from .chats import Chat, User
+from .messages import CallbackQuery, Message, Sticker
+from .files import PhotoFile, Document, File
 
 
 class TelegramBot:
@@ -66,8 +68,16 @@ class TelegramBot:
                 self.busy = False
         if not r["ok"]:
             if "message is not modified" in r["description"]:
-                print(":: warn: message not modified.")
-                return r
+                print(":: warn: message not modified.", file=stderr)
+                return None
+            elif "Too Many Requests" in r["description"]:
+                try:
+                    delay = int(r["description"].split("retry after ")[-1])
+                except ValueError:
+                    delay = 30
+                print(f"too many requests, waiting {delay} seconds", file=stderr)
+                sleep(delay)
+                return self.query(method, params, connection, headers)
             raise self.GenericQueryException(
                 "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
         return r
@@ -193,7 +203,37 @@ class TelegramBot:
                 "reply_markup": reply_markup
             }
             p.update(a)
-        return self.query("editMessageText", p)
+        if (ret := self.query("editMessageText", p)) is None:
+            return message
+        else:
+            return Message.cast(ret)[0]
+        # return True if telegram does, otherwise False
+
+    def editMessageCaption(self, message, caption, parse_mode="markdown", reply_markup=None, a=None):
+        assert isinstance(message, Message) or isinstance(message, CallbackQuery)
+        assert type(reply_markup) is str or reply_markup is None
+        if not self.bootstrapped:
+            raise self.BootstrapException("perform bootstrap before other operations.")
+        if a is not None:
+            assert type(a) == dict
+        else:
+            a = {}
+        p = {
+            "chat_id": message.chat.id,
+            "message_id": message.id,
+            "caption": caption,
+            "parse_mode": parse_mode
+        }
+        p.update(a)
+        if reply_markup:
+            a = {
+                "reply_markup": reply_markup
+            }
+            p.update(a)
+        if (ret := self.query("editMessageCaption", p)) is None:
+            return message
+        else:
+            return Message.cast(ret)[0]
         # return True if telegram does, otherwise False
 
     def editMessageReplyMarkup(self, reply_markup, message=None, a=None):
@@ -222,21 +262,27 @@ class TelegramBot:
             p.update(a)
         return self.query("deleteMessage", p)
 
-    def sendPhoto(self, user, photo, reply_to_message=None, a=None):
+    def sendPhoto(self, user, photo, caption=None, parse_mode="markdown", reply_to_message=None, a=None):
         assert isinstance(user, Chat)
-        assert isinstance(photo, PhotoFile)
+        assert isinstance(photo, (PhotoFile, str))
         if a is not None:
             assert type(a) == dict
         else:
             a = {}
-        p = {"chat_id": user.id, "photo": photo.id}
+        p = {
+            "chat_id": user.id,
+            "photo": photo if isinstance(photo, str) else photo.id,
+            "parse_mode": parse_mode
+        }
+        if caption is not None:
+            p["caption"] = caption
         p.update(a)
         if reply_to_message:
             a = {
                 "reply_to_message_id": reply_to_message.id
             }
             p.update(a)
-        return self.query("sendPhoto", p)
+        return Message.cast(self.query("sendPhoto", p))[0]
 
     def sendSticker(self, user, sticker, reply_to_message=None, a=None):
         if not isinstance(user, Chat):
@@ -253,7 +299,7 @@ class TelegramBot:
                 "reply_to_message_id": reply_to_message.id
             }
             p.update(a)
-        return self.query("sendSticker", p)
+        return Message.cast(self.query("sendSticker", p))[0]
 
     def sendDocument(self, user, document, name=None, mime=None, reply_to_message=None, a=None):
         if type(user) is not User and type(user) is not Chat:
@@ -309,7 +355,7 @@ class TelegramBot:
             }
             p.update(a)
         p.update(a)
-        return self.query("forwardMessage", p)
+        return Message.cast(self.query("forwardMessage", p))[0]
 
     def answerCallbackQuery(self, callback_query, text, show_alert=None, a=None):
         assert isinstance(callback_query, CallbackQuery)
@@ -350,7 +396,7 @@ class TelegramBot:
             raise self.BootstrapException("perform bootstrap before other operations.")
         return len(self.updates) > 0
 
-    def get_updates(self, from_=None) -> list[Update]:
+    def get_updates(self, from_=None) -> Iterable[Update]:
         if not self.bootstrapped:
             raise self.BootstrapException("perform bootstrap before other operations.")
         if from_ is None:

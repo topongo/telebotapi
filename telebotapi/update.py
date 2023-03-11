@@ -1,4 +1,5 @@
-from messages import Message
+from .messages import Message
+
 
 class Update:
     def __init__(self, u):

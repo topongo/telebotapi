@@ -1,6 +1,6 @@
-from entities import Entity
-from files import File, PhotoFile
-from chats import User, Chat
+from .entities import Entity
+from .files import File, PhotoFile
+from .chats import User, Chat
 
 
 class CallbackQuery:
@@ -56,21 +56,17 @@ class Message:
         for i in ("message", "edited_message", "channel_post", "edited_channel_post", "callback_query",
                   "result"):
             if i in u:
-                if "text" in u[i]:
-                    return Text(u[i]), i
-                elif "photo" in u[i]:
-                    return PhotoMessage(u[i]), i
-                elif "message" in u[i]:
-                    return CallbackQuery(u[i]), i
-                elif "sticker" in u[i]:
-                    return Sticker(u[i]), i
-                elif "audio" in u[i]:
-                    return Audio(u[i]), i
-                else:
-                    # return generic message
-                    return Message(u[i]), i
-                    # raise TypeError(f"Malformed data: {u[i]}")
+                for t, c in zip(["text", "photo", "message", "sticker", "audio"],
+                                [Text, PhotoMessage, CallbackQuery, Sticker, Audio]):
+                    if t in u[i]:
+                        return c(u[i]), t
+
+                return Message(u[i]), i
         raise TypeError(f"Unrecognized data: {u}")
+
+    @staticmethod
+    def by_id(message_id, chat_id):
+        return Message({"message_id": message_id, "chat": Chat.by_id(chat_id).raw})
 
 
 class Text(Message):
@@ -148,7 +144,7 @@ class PhotoMessage(Message):
         Message.__init__(self, c)
         self.photos = []
         self.type = "photo"
-        self.thumbnail = PhotoMessage(c["photo"][0])
+        self.thumbnail = PhotoFile(c["photo"][0])
         self.photo = PhotoFile(c["photo"][1])
         if "caption" in c:
             self.text = c["caption"]
