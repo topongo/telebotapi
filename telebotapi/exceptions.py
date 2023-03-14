@@ -15,7 +15,8 @@ class QueryException(Exception):
     def cast(data, method, query):
         c = QueryException
         if "description" in data:
-            if data["description"] == "Bad Request: message to edit not found":
+            if data["description"] == "Bad Request: message to edit not found" or \
+                    data["description"] == "Bad Request: message to delete not found":
                 c = MessageNotFound
             elif "Bad Request: message is not modified:" in data["description"]:
                 c = MessageNotModified
