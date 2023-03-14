@@ -9,10 +9,11 @@ from .update import Update
 from .chats import Chat, User
 from .messages import CallbackQuery, Message, Sticker
 from .files import PhotoFile, Document, File
+from .exceptions import QueryException, TooManyRequests
 
 
 class TelegramBot:
-    def __init__(self, token, name=None, safe_mode=None, max_telegram_timeout=60):
+    def __init__(self, token, name=None, safe_mode=None, max_telegram_timeout=60, auto_retry=None):
         if len(token) == 46:
             self.token = token
         else:
@@ -30,6 +31,7 @@ class TelegramBot:
         self.daemon = self.Daemon(self.poll, self.current_thread, self.daemon_delay)
         self.safe_mode = safe_mode
         self.max_telegram_timeout = max_telegram_timeout
+        self.auto_retry = auto_retry
 
     class TokenException(Exception):
         pass
@@ -67,19 +69,13 @@ class TelegramBot:
             finally:
                 self.busy = False
         if not r["ok"]:
-            if "message is not modified" in r["description"]:
-                print(":: warn: message not modified.", file=stderr)
-                return None
-            elif "Too Many Requests" in r["description"]:
-                try:
-                    delay = int(r["description"].split("retry after ")[-1])
-                except ValueError:
-                    delay = 30
+            exc = QueryException.cast(r, method, params)
+            if isinstance(exc, TooManyRequests) and self.auto_retry:
+                delay = int(exc.timeout or 30)
                 print(f"too many requests, waiting {delay} seconds", file=stderr)
                 sleep(delay)
                 return self.query(method, params, connection, headers)
-            raise self.GenericQueryException(
-                "Telegram responded: \"" + r["description"] + "\" with error code " + str(r["error_code"]))
+            raise exc
         return r
 
     def getUpdates(self, a=None):

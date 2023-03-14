@@ -5,7 +5,7 @@ with open("README.md") as f:
 
 setuptools.setup(
       name='telebotapi',
-      version='0.9.9.1',
+      version='0.9.9.2',
       description="A telegram bot api for telegram, with asynchronous polling",
       url='https://github.com/topongo/telebotapi',
       author='Lorenzo Bodini',
